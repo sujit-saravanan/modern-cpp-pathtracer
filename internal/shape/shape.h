@@ -38,13 +38,19 @@ public:  // Public Constructors/Destructors/Overloads
         [[nodiscard]] glm::vec3 normal_impl(const Ray &ray, float distance) const noexcept;
         [[nodiscard]] glm::vec3 position_impl() const noexcept;
         [[nodiscard]] glm::vec3 random_point_impl(uint32_t seed, glm::vec3 world_point) const noexcept;
+
+#ifdef SOA
+        [[nodiscard]] glm::vec3 calculate_normal() const noexcept;
+#endif
 public:  // Public Member Variables
 private: // Private Member Functions
 private: // Private Member Variablesg
         glm::vec3 m_p1{};
         glm::vec3 m_p2{};
         glm::vec3 m_p3{};
+#ifndef SOA
         glm::vec3 m_normal{}; // precomputed as triangle normals are expensive to calculate
+#endif
 };
 
 class Circle : public ShapeStruct<Circle> {
