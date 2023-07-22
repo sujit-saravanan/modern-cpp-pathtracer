@@ -4,6 +4,36 @@
 static constexpr float miss_value = std::numeric_limits<float>::max();
 static constexpr float epsilon = std::numeric_limits<float>::epsilon();
 
+inline uint32_t pcg_hash(uint32_t input) {
+        uint32_t state = input * 747796405u + 2891336453u;
+        uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+        return (word >> 22u) ^ word;
+}
+
+inline float random_pcg(uint32_t &seed) {
+        seed = pcg_hash(seed);
+        return (float) seed / (float) std::numeric_limits<uint32_t>::max();
+}
+
+inline float random_pcg(uint32_t &seed, float min, float max) {
+        return min + (max - min) * random_pcg(seed);
+}
+
+inline static glm::vec3 random_vec3_pcg(uint32_t &seed, float min, float max) {
+        return {random_pcg(seed, min, max), random_pcg(seed, min, max), random_pcg(seed, min, max)};
+}
+
+inline static glm::vec3 random_in_unit_sphere_pcg(uint32_t &seed) {
+        while (true) {
+                auto p = random_vec3_pcg(seed, -1, 1);
+                if (glm::length2(p) >= 1) continue;
+                return p;
+        }
+}
+
+inline static glm::vec3 random_unit_vector_pcg(uint32_t &seed) {
+        return glm::normalize(random_in_unit_sphere_pcg(seed));
+}
 
 Triangle::Triangle(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3) : m_p1(p1), m_p2(p2), m_p3(p3) {
         glm::vec3 edge1 = m_p2 - m_p1;
@@ -43,6 +73,19 @@ glm::vec3 Triangle::normal_impl(const Ray &ray, float distance) const noexcept {
 glm::vec3 Triangle::position_impl() const noexcept {
         return (m_p1 + m_p2 + m_p3) / 3.0f;
 }
+glm::vec3 Triangle::random_point_impl(uint32_t seed, glm::vec3) const noexcept {
+        float rand1 = random_pcg(seed, 0, 1);
+        float rand2 = random_pcg(seed, 0, 1);
+        
+        if (rand1 + rand2 > 1.0f) {
+                rand1 = 1.0f - rand1;
+                rand2 = 1.0f - rand2;
+        }
+        
+        float rand3 = 1.0f - rand1 - rand2;
+        
+        return rand1 * m_p1 + rand2 * m_p2 + rand3 * m_p3;
+}
 
 
 Circle::Circle(glm::vec3 center, float radius) : m_center(center), m_radius(radius) {
@@ -61,12 +104,17 @@ float Circle::intersect_impl(const Ray &ray) const noexcept {
 }
 glm::vec3 Circle::normal_impl(const Ray &ray, float distance) const noexcept {
         glm::vec3 hit_point = ray.at(distance);
-        glm::vec3 normal_at_hit = hit_point - m_center;
+        glm::vec3 normal_at_hit = (hit_point - m_center) / m_radius;
         
-        return glm::dot(ray.direction, normal_at_hit) > epsilon ? -normal_at_hit : normal_at_hit;
+        return glm::dot(ray.direction, normal_at_hit) < epsilon ? normal_at_hit : -normal_at_hit;
 }
 glm::vec3 Circle::position_impl() const noexcept {
         return m_center;
+}
+glm::vec3 Circle::random_point_impl(uint32_t seed, glm::vec3) const noexcept {
+        glm::vec3 rand = random_unit_vector_pcg(seed);
+        
+        return m_center + m_radius * rand;
 }
 
 
@@ -89,4 +137,7 @@ glm::vec3 Plane::normal_impl(const Ray &ray, float distance) const noexcept {
 }
 glm::vec3 Plane::position_impl() const noexcept {
         return glm::vec3(0.0f);
+}
+glm::vec3 Plane::random_point_impl(uint32_t seed, glm::vec3) const noexcept {
+        return glm::vec3();
 }

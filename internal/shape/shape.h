@@ -24,6 +24,9 @@ struct ShapeStruct {
         [[nodiscard]] glm::vec3 position() const noexcept {
                 return static_cast<const Impl &>(*this).position_impl();
         }
+        [[nodiscard]] glm::vec3 random_point(uint32_t seed, glm::vec3 world_point) const noexcept {
+                return static_cast<const Impl &>(*this).random_point_impl(seed, world_point);
+        }
 };
 
 
@@ -34,6 +37,7 @@ public:  // Public Constructors/Destructors/Overloads
         [[nodiscard]] float intersect_impl(const Ray &ray) const noexcept;
         [[nodiscard]] glm::vec3 normal_impl(const Ray &ray, float distance) const noexcept;
         [[nodiscard]] glm::vec3 position_impl() const noexcept;
+        [[nodiscard]] glm::vec3 random_point_impl(uint32_t seed, glm::vec3 world_point) const noexcept;
 public:  // Public Member Variables
 private: // Private Member Functions
 private: // Private Member Variablesg
@@ -50,6 +54,7 @@ public:  // Public Member Functions
         [[nodiscard]] float intersect_impl(const Ray &ray) const noexcept;
         [[nodiscard]] glm::vec3 normal_impl(const Ray &ray, float distance) const noexcept;
         [[nodiscard]] glm::vec3 position_impl() const noexcept;
+        [[nodiscard]] glm::vec3 random_point_impl(uint32_t seed, glm::vec3 world_point) const noexcept;
 public:  // Public Member Variables
 private: // Private Member Functions
         glm::vec3 m_center{};
@@ -64,6 +69,7 @@ public:  // Public Member Functions
         [[nodiscard]] float intersect_impl(const Ray &ray) const noexcept;
         [[nodiscard]] glm::vec3 normal_impl(const Ray &ray, float distance) const noexcept;
         [[nodiscard]] glm::vec3 position_impl() const noexcept;
+        [[nodiscard]] glm::vec3 random_point_impl(uint32_t seed, glm::vec3 world_point) const noexcept;
 public:  // Public Member Variables
 private: // Private Member Functions
         glm::vec3 m_normal{};
@@ -78,12 +84,16 @@ public:  // Public Member Functions
         [[nodiscard]] float intersect(const Ray &ray) const noexcept {
                 return std::visit([ray](auto &&shape) { return shape.intersect(ray); }, *this);
         }
-        
+
         [[nodiscard]] glm::vec3 normal(const Ray &ray, float distance) const noexcept {
                 return std::visit([ray, distance](auto &&shape) { return shape.normal(ray, distance); }, *this);
         }
-        
+
         [[nodiscard]] glm::vec3 position() const noexcept {
                 return std::visit([](auto &&shape) { return shape.position(); }, *this);
+        }
+        
+        [[nodiscard]] glm::vec3 random_point(uint32_t seed, glm::vec3 world_point) const noexcept {
+                return std::visit([seed, world_point](auto &&shape) { return shape.random_point(seed, world_point); }, *this);
         }
 };

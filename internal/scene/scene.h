@@ -7,8 +7,8 @@
 #include <glm/gtx/norm.hpp>
 
 
-static constexpr int sample_count = 200;
-static constexpr int recurse_depth = 10000;
+static constexpr int sample_count = 20000;
+static constexpr int recurse_depth = 2000;
 
 inline uint32_t pcg_hash(uint32_t input) {
         uint32_t state = input * 747796405u + 2891336453u;
@@ -37,10 +37,25 @@ inline static glm::vec3 random_in_unit_sphere_pcg(uint32_t &seed) {
         }
 }
 
+inline static glm::vec3 cosine_hemisphere(uint32_t &seed, glm::vec3 n) {
+        // Create a vector perpendicular to the normal
+        uint nx = uint(n.x == 0);
+        glm::vec3 perp = cross(n, glm::vec3(nx, 0, 1-nx));
+        
+        // Rotate perp randomly to create a hollow disk
+        float theta = random_pcg(seed) * std::numbers::pi_v<float>;
+        glm::vec3 rotated = (perp * cosf(theta)) + (cross(n, perp) * sinf(theta));
+        
+        // Multiply it by a random radius to fill the disk
+        float r = random_pcg(seed);
+        glm::vec3 disk = rotated * (r / length(rotated));
+        float up = sqrtf(1 - (r*r));
+        return disk + (n * up);
+}
+
 inline static glm::vec3 random_unit_vector_pcg(uint32_t &seed) {
         return glm::normalize(random_in_unit_sphere_pcg(seed));
 }
-
 
 
 struct HitBuffer {
@@ -96,62 +111,65 @@ HitBuffer Scene<WIDTH, HEIGHT>::intersectWorld(const Ray &ray) {
 
 template<uint32_t WIDTH, uint32_t HEIGHT>
 glm::vec3 Scene<WIDTH, HEIGHT>::sample(uint32_t &seed, Ray &&ray, int recursion_depth, uint32_t& samples_obtained) {
-        if (recursion_depth <= 0){
+        if (recursion_depth <= 0){ // Return miss color when recursion depth is exceeded
                 samples_obtained++;
                 return glm::vec3{0};
         }
         
         HitBuffer hit = intersectWorld(ray);
-        if (!hit.is_hit()){
+        if (!hit.is_hit()){ // Return miss color on miss
                 samples_obtained++;
-                return glm::vec3{0};
+                return glm::vec3{0.0, 0.0, 0.0};
         }
         
         auto color = m_colors[hit.index];
         auto intensity = m_intensities[hit.index];
+        if (intensity > 0){
+                samples_obtained++;
+                if (recursion_depth == recurse_depth)
+                        return (color * intensity) / 255.0f; // Return light color
+                return {0, 0, 0}; // Return miss color on light intersect (For debugging)
+        }
         
         auto hit_location = ray.at(hit.distance);
         auto normal = m_shapes[hit.index].normal(ray, hit.distance);
-        glm::vec3 target = hit_location + normal + random_unit_vector_pcg(seed);
-        auto new_ray = Ray(hit_location, target - hit_location);
-        
-        float cos_theta = glm::max(glm::dot(new_ray.direction, normal), 0.0f);
-        glm::vec3 brdf = color * cos_theta;
         
         // Next event estimation
         glm::vec3 next_event_color{0};
         for (uint32_t light_index : m_light_indices) {
                 Shape light_source = m_shapes[light_index];
                 // Sample a point on the light source
-                glm::vec3 light_point = light_source.position();
+                glm::vec3 light_point = light_source.random_point(seed, hit_location);
 
                 // Calculate the direction from the hit point to the light source
                 float light_distance = glm::length2(light_point - hit_location);
                 glm::vec3 light_direction = glm::normalize(light_point - hit_location);
 
                 // Create a shadow ray to check if the hit point is occluded by other objects
-                Ray shadow_ray(hit_location, light_direction);
+                Ray shadow_ray(hit_location + normal * 0.001f, light_direction);
                 HitBuffer shadow_hit = intersectWorld(shadow_ray);
 
                 // If the shadow ray is not occluded, calculate the light's contribution
                 if (shadow_hit.index == light_index) {
                         // Calculate the light intensity and BRDF
-                        float light_intensity = m_intensities[light_index] / light_distance;
+                        float light_intensity = m_intensities[light_index];
                         glm::vec3 light_color = m_colors[light_index];
-                        
-                        // Calculate the cosine factor between the light direction and surface normal
-                        float light_cos_theta = glm::max(glm::dot(light_direction, normal), 0.0f);
-                        glm::vec3 light_brdf = light_color * light_cos_theta;
-
-                        // Accumulate the next event estimation color
-                        next_event_color += (light_intensity * light_brdf);
+                        next_event_color += light_intensity * light_color * glm::max(glm::dot(light_direction, normal), 0.0f) / light_distance;
                 }
                 samples_obtained++;
         }
-
+        
+        // Indirect Lighting
+        glm::vec3 target = hit_location + normal + random_unit_vector_pcg(seed);
+        auto new_ray = Ray(hit_location + normal * 0.001f, target - hit_location);
+        
+        float cos_theta = glm::max(glm::dot(new_ray.direction, normal), 0.0f);
+        glm::vec3 brdf = color * cos_theta;
+        
         glm::vec3 reflected = sample(seed,Ray(hit_location, target - hit_location), recursion_depth - 1, samples_obtained);
         samples_obtained++;
-        return intensity + (brdf * reflected + next_event_color) / 255.0f;
+
+        return   next_event_color / 255.0f + (brdf * reflected) / 255.0f;
 }
 
 template<uint32_t WIDTH, uint32_t HEIGHT>
@@ -167,7 +185,6 @@ void Scene<WIDTH, HEIGHT>::trace(uint32_t u, uint32_t v, int recursion_depth) {
         pixel_color /= float(samples_obtained);
         pixel_color /= (1.0f + pixel_color);
         pixel_color *= 255.0f;
-        
         m_image.set(u, v, pixel_color);
 }
 
@@ -177,9 +194,9 @@ void Scene<WIDTH, HEIGHT>::render() {
         
         for (uint32_t y = 0; y < HEIGHT; y++)
                 for (uint32_t x = 0; x < WIDTH; x++)
+//                        trace(x, y, recurse_depth);
                         pool.push_task(&Scene<WIDTH, HEIGHT>::trace, this, x, y, recurse_depth);
         pool.wait_for_tasks();
-        
 }
 
 template<uint32_t WIDTH, uint32_t HEIGHT>
