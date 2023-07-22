@@ -8,7 +8,7 @@ struct testt {
 
 int main(int argc, char *argv[]) {
         std::cout << "Start\n";
-        Scene<1200, 1200> scene({-2, 2, 1}, glm::vec3{0, 0, -1}, {0, 1, 0}, 90);
+        Scene<2400, 2400> scene({-2, 2, 1}, glm::vec3{0, 0, -1}, {0, 1, 0}, 90);
 
 #ifdef SOA
         scene.m_shape_soa.insert(Circle(glm::vec3{0.0, 1.5, -1.0}, 1), {200, 100, 100}, 10);

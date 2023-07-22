@@ -6,7 +6,7 @@
 #include "shape_soa.h"
 #include "raytracer_random.h"
 
-static constexpr int sample_count = 200;
+static constexpr int sample_count = 20000;
 static constexpr int recurse_depth = 2000;
 
 template<uint32_t WIDTH, uint32_t HEIGHT>

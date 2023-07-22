@@ -1,5 +1,5 @@
 .idea/
-build/
+build/*
 !build/CMakeLists.txt
 perf.data
 perf.data.old
